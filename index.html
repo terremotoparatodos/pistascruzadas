@@ -626,7 +626,7 @@ async function createRoom(){
   if(!db){ alert('Firebase todavía no está configurado (falta pegar la config real). Por ahora podés mirar el diseño, pero crear sala no va a andar.'); return; }
   const code = genCode();
   const r = {
-    code, seats:[null,null,null,null], phase:'lobby',
+    code, seats:['','','',''], phase:'lobby',
     round:0, board:null, cellQueue:[], turnQueue:[], turnIdx:0, turn:null,
     score:{A:0,B:0}, log:[], updatedAt:Date.now()
   };
@@ -654,7 +654,7 @@ async function confirmSeat(){
   if(existingIdx !== -1){
     MY_SEAT = existingIdx;
   } else {
-    const freeIdx = r.seats.findIndex(s => s === null);
+    const freeIdx = r.seats.findIndex(s => !s);
     if(freeIdx === -1){ alert('La sala ya tiene 4 jugadores.'); return; }
     r.seats[freeIdx] = name;
     MY_SEAT = freeIdx;
