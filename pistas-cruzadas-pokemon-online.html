@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pistas Cruzadas Pokémon · Online</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+<style>
+  :root{
+    --ink:#2c3a42; --teal:#3fb9b9; --teal-deep:#1f7d7d; --mint:#eaf9f7; --paper:#ffffff;
+    --shell:#eef1f5; --shell-dark:#c7d0d9; --shell-darker:#93a2b1;
+    --team-a:#e0473a; --team-b:#2f6fe0; --select:#f2891f;
+    --cam-gap:20px;
+    --console-h:min(92vh, 880px);
+    --console-w:calc(var(--console-h) * 9 / 16);
+    /* alias para no romper reglas viejas */
+    --lcd-0:var(--teal); --lcd-1:var(--teal-deep); --lcd-2:var(--mint); --lcd-3:var(--paper);
+  }
+  *{box-sizing:border-box;}
+  html, body{ height:100%; }
+  body{
+    margin:0;
+    background:radial-gradient(circle at 50% 0%, #2b2b3d, #17171f 70%);
+    display:flex; align-items:center; justify-content:center;
+    padding:16px; font-family:'Nunito', sans-serif;
+  }
+  .stage{
+    display:flex; align-items:center; justify-content:center; gap:var(--cam-gap);
+  }
+  .cam-col{ display:flex; flex-direction:column; gap:var(--cam-gap); }
+  .cam-box{
+    width:var(--console-w);
+    height:calc((var(--console-h) - var(--cam-gap)) / 2);
+    background:linear-gradient(160deg, var(--shell), var(--shell-dark));
+    border:4px solid var(--shell-darker); border-radius:16px;
+    display:flex; align-items:center; justify-content:center;
+    color:#8a97a5; font-family:'Baloo 2', sans-serif; font-size:16px; font-weight:700;
+    box-shadow:0 8px 0 var(--shell-darker), 0 14px 24px rgba(0,0,0,.4), inset 0 0 0 2px rgba(255,255,255,.5);
+  }
+  .center-col{ display:flex; flex-direction:column; align-items:center; gap:10px; }
+  .external-board{
+    width:var(--console-w);
+    background:linear-gradient(160deg, var(--paper), var(--mint));
+    border:4px solid var(--teal); border-radius:14px;
+    padding:8px 12px; color:var(--ink);
+    box-shadow:0 6px 0 var(--shell-darker), inset 0 0 0 2px rgba(255,255,255,.5);
+  }
+  .brand-logo{
+    font-family:'Fredoka', sans-serif; text-align:center; color:var(--ink);
+    font-size:15px; line-height:1.35; letter-spacing:.4px;
+  }
+  .brand-logo span{ display:block; font-size:11px; color:var(--lcd-1); font-weight:600; }
+  /* Consola: una sola pantalla grande, prioriza que entre todo sin scroll */
+  .console{
+    height:var(--console-h);
+    width:var(--console-w);
+    background:linear-gradient(160deg, var(--shell), var(--shell-dark) 70%, var(--shell-darker));
+    border-radius:30px 30px 46px 46px;
+    padding:16px;
+    box-shadow:0 14px 0 var(--shell-darker), 0 26px 44px rgba(0,0,0,.5), inset 0 2px 0 rgba(255,255,255,.6);
+    display:flex; flex-direction:column;
+  }
+  .screen{
+    background:linear-gradient(160deg, var(--lcd-3), #ffffff 60%);
+    border:5px solid var(--lcd-0); border-radius:16px;
+    padding:12px; flex:1; overflow-y:auto; position:relative; color:var(--ink);
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,.6), inset 0 10px 18px rgba(28,55,102,.05);
+  }
+  .screen::before{
+    content:""; position:absolute; top:0; left:0; right:0; height:40%;
+    background:linear-gradient(180deg, rgba(255,255,255,.35), transparent);
+    pointer-events:none; border-radius:14px 14px 0 0;
+  }
+  h1,h2{ font-family:'Baloo 2', sans-serif; font-weight:700; font-size:18px; line-height:1.4; margin:0 0 10px; color:var(--ink); }
+  p, label, .cell, button, input{ font-size:16px; font-family:'Nunito', sans-serif; }
+  .scorebar{
+    display:flex; justify-content:space-between; align-items:center;
+    font-family:'Fredoka', sans-serif; font-size:12px; font-weight:600;
+    color:var(--ink); width:100%;
+  }
+  .scorebar span.team-a{ color:#c23b2f; }
+  .scorebar span.team-b{ color:#2255b8; }
+  button{
+    font-family:'Nunito', sans-serif; font-weight:700;
+    background:linear-gradient(180deg, var(--lcd-1), var(--lcd-0));
+    color:#fff; border:none; border-radius:12px; padding:11px 16px; cursor:pointer;
+    width:100%; margin-top:10px; box-shadow:0 3px 0 rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.3);
+    letter-spacing:.3px;
+  }
+  button:disabled{ opacity:.45; cursor:default; }
+  button:active:not(:disabled){ transform:translateY(2px); box-shadow:0 1px 0 rgba(0,0,0,.25); }
+  button.secondary{ background:transparent; border:2px solid var(--lcd-1); color:var(--lcd-1); box-shadow:none; }
+  input[type=text]{
+    font-family:'Nunito', sans-serif; font-size:16px; width:100%; padding:9px 12px;
+    border:2px solid var(--lcd-1); background:#fff; color:var(--ink);
+    border-radius:10px; margin-bottom:10px;
+  }
+  .code-display{
+    font-family:'Fredoka', sans-serif; font-size:26px; text-align:center; font-weight:600;
+    letter-spacing:8px; background:var(--lcd-0); color:#fff;
+    border-radius:10px; padding:12px 6px; margin:12px 0;
+  }
+  .seatlist{ display:flex; flex-direction:column; gap:6px; margin:10px 0; }
+  .seat{
+    display:flex; justify-content:space-between; padding:9px 12px;
+    border-radius:10px; border:2px dashed var(--lcd-1); font-size:15px;
+  }
+  .seat.filled{ border-style:solid; }
+  .seat.mine{ background:var(--lcd-2); border:3px solid var(--select); box-shadow:0 0 0 1px var(--select) inset; }
+  .seat.a{ border-color:var(--team-a); }
+  .seat.b{ border-color:var(--team-b); }
+  .board{
+    display:grid; grid-template-columns: 54px repeat(3, 1fr); grid-template-rows: 54px repeat(3, 1fr);
+    gap:5px; margin:10px 0;
+  }
+  .cat{
+    background:linear-gradient(160deg, var(--lcd-1), #2f5d94); color:#fff; display:flex; align-items:center; justify-content:center;
+    text-align:center; font-size:12px; font-weight:700; line-height:1.1; border-radius:8px; padding:4px;
+  }
+  .corner{ background:transparent; }
+  .cell{
+    background:linear-gradient(160deg, #ffffff, var(--lcd-2)); border-radius:10px; display:flex; align-items:center; justify-content:center;
+    aspect-ratio:1/1; position:relative; font-size:22px; overflow:hidden;
+    box-shadow:inset 0 0 0 2px rgba(61,111,168,.25);
+  }
+  .cell.clickable{ cursor:pointer; }
+  .cell.clickable:active{ transform:scale(.95); }
+  .cell.secret{ animation:glow 1s infinite; box-shadow:inset 0 0 0 3px var(--lcd-0), 0 0 10px 2px rgba(61,111,168,.6); }
+  @keyframes glow{ 0%,100%{ filter:brightness(1); } 50%{ filter:brightness(1.25); } }
+  .cell.hit{ background:linear-gradient(160deg, #d7f7d0, #a8e89e); animation:correctPop .6s ease-out; }
+  .cell.miss{ background:linear-gradient(160deg, #ffd9d4, #ffb3ab); }
+  @keyframes correctPop{
+    0%{ transform:scale(1); }
+    30%{ transform:scale(1.28) rotate(-4deg); }
+    60%{ transform:scale(.92) rotate(3deg); }
+    100%{ transform:scale(1) rotate(0); }
+  }
+  .cell .sprite{
+    position:absolute; inset:6%; width:88%; height:88%;
+    object-fit:contain;
+  }
+  @keyframes popIn{
+    0%{ transform:scale(0) rotate(-18deg); opacity:0; }
+    65%{ transform:scale(1.18) rotate(6deg); opacity:1; }
+    100%{ transform:scale(1) rotate(0deg); opacity:1; }
+  }
+  @keyframes bob{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-4px); } }
+  .celebrate{ display:inline-block; animation:bounceIn .5s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes bounceIn{
+    0%{ transform:scale(.3); opacity:0; }
+    60%{ transform:scale(1.15); opacity:1; }
+    100%{ transform:scale(1); }
+  }
+  .sparkles{ position:relative; height:0; }
+  .spark{ position:absolute; top:0; font-size:20px; animation:sparkFloat 1.1s ease-out forwards; }
+  @keyframes sparkFloat{
+    0%{ transform:translateY(0) scale(.4) rotate(0deg); opacity:1; }
+    100%{ transform:translateY(-46px) scale(1.3) rotate(50deg); opacity:0; }
+  }
+  .cell .mark{
+    position:relative; z-index:2; font-size:20px; font-weight:800; color:var(--ink);
+    background:rgba(255,255,255,.75); border-radius:50%;
+    width:26px; height:26px; display:flex; align-items:center; justify-content:center;
+  }
+  .big-sprite{ width:130px; height:130px; object-fit:contain; }
+  .badge{
+    display:inline-block; font-family:'Fredoka', sans-serif; font-size:11px; font-weight:600;
+    padding:5px 10px; border-radius:14px; color:#fff;
+  }
+  .badge.a{ background:var(--team-a); }
+  .badge.b{ background:var(--team-b); }
+  .badge.active{ box-shadow:0 0 0 3px var(--select); }
+  .center-msg{ text-align:center; padding:26px 6px; }
+  .center-msg .big{ font-size:38px; margin:6px 0 14px; }
+  .log{ font-size:14px; max-height:110px; overflow-y:auto; border-top:2px solid var(--lcd-2); margin-top:10px; padding-top:6px; }
+  .log div{ margin-bottom:3px; }
+  .hint{ font-size:14px; opacity:.7; margin-top:2px; }
+  .error{ font-size:14px; color:#b1362a; font-weight:700; min-height:18px; margin:2px 0 0; }
+  .title-menu{
+    background:linear-gradient(170deg, #8890e8, #6f79d8);
+    border-radius:12px; margin:-12px; padding:16px 14px;
+    min-height:calc(100% + 24px);
+    display:flex; flex-direction:column; gap:10px;
+  }
+  .title-box{
+    background:linear-gradient(180deg, #e4e4ea, #c2c2cc);
+    border:2px solid #4c4e60; border-radius:7px; padding:10px 14px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.7), 0 2px 0 rgba(0,0,0,.15);
+  }
+  .title-box.highlight{ border-color:#2fbf42; box-shadow:0 0 0 2px #2fbf42 inset, inset 0 1px 0 rgba(255,255,255,.7), 0 2px 0 rgba(0,0,0,.15); }
+  .title-box-header{ font-family:'Baloo 2', sans-serif; font-weight:700; font-size:15px; color:#2c2c38; margin-bottom:4px; }
+  .title-stat-row{ display:flex; justify-content:space-between; font-size:13px; color:#2255b8; font-weight:700; padding:1px 0 1px 10px; }
+  .title-box p.hint{ margin:2px 0 6px; color:#4a4a58; }
+  .title-box button{ margin-top:6px; }
+  .pulse{ animation:pulse 1.4s infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.4;} }
+  .demo-bar{
+    display:flex; gap:6px; flex-wrap:wrap; justify-content:center;
+    margin-top:10px; padding-top:10px; border-top:2px dashed var(--lcd-1);
+  }
+  .demo-bar button{ width:auto; flex:1; font-size:13px; padding:8px 6px; margin-top:0; }
+  .demo-bar button.current{ box-shadow:0 0 0 3px var(--select); }
+  .demo-tag{
+    display:inline-block; font-family:'Baloo 2', sans-serif; font-size:11px; font-weight:700;
+    color:#fff; background:var(--select); padding:3px 10px; border-radius:10px; margin-bottom:8px;
+  }
+  .poke-suggest{ max-height:190px; overflow-y:auto; margin:-4px 0 8px; }
+  .poke-suggest-row{
+    display:flex; align-items:center; gap:8px; padding:5px 6px;
+    border-radius:8px; cursor:pointer;
+  }
+  .poke-suggest-row:hover, .poke-suggest-row:active{ background:var(--lcd-2); }
+  .poke-suggest-row img{ width:28px; height:28px; object-fit:contain; flex-shrink:0; }
+  .poke-suggest-row span{ font-size:14px; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="cam-col">
+    <div class="cam-box">CÁMARA 1</div>
+    <div class="cam-box">CÁMARA 2</div>
+  </div>
+  <div class="center-col">
+    <div id="topScreen" class="external-board"></div>
+    <div class="console">
+      <div id="screen" class="screen"></div>
+    </div>
+  </div>
+  <div class="cam-col">
+    <div class="cam-box">CÁMARA 3</div>
+    <div class="cam-box">CÁMARA 4</div>
+  </div>
+</div>
+
+<script>
+// ==== FIREBASE: pegá acá tu config real (Firebase Console > Configuración del proyecto > tu app web) ====
+const firebaseConfig = {
+  apiKey: "AIzaSyDgkkgtcP9FRcQ6rgzwgqyX2Ev58H8JLBs",
+  authDomain: "pistascruzadas.firebaseapp.com",
+  databaseURL: "https://pistascruzadas-default-rtdb.firebaseio.com",
+  projectId: "pistascruzadas",
+  storageBucket: "pistascruzadas.firebasestorage.app",
+  messagingSenderId: "94931049028",
+  appId: "1:94931049028:web:359d82211fb3b83f68ba11"
+};
+let db = null;
+try{
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.database();
+}catch(e){
+  console.warn('Firebase no está configurado todavía (config con PEGAR_ACA). El diseño se ve igual, pero crear/unirse a sala no va a andar hasta pegar la config real.', e);
+}
+// ==========================================================================
+
+const CATEGORY_POOL = [
+  "Miedo", "Nostalgia", "Trauma", "Vergüenza", "Caos", "Rebeldía", "Ternura", "Carisma",
+  "Rareza", "Fuerza", "Ícono", "Lujo", "Suerte", "Peligro", "Misterio", "Sabiduría",
+  "Pureza", "Alegría", "Tristeza", "Furia", "Calma", "Ansiedad", "Euforia", "Melancolía",
+  "Paz", "Locura", "Obsesión", "Deseo", "Envidia", "Orgullo", "Humildad", "Valentía",
+  "Cobardía", "Lealtad", "Traición", "Esperanza", "Desesperación", "Curiosidad", "Aburrimiento", "Sorpresa",
+  "Asco", "Culpa", "Gratitud", "Rencor", "Pasión", "Indiferencia", "Ternurita", "Angustia",
+  "Serenidad", "Impaciencia", "Vergonzoso", "Timidez", "Arrogancia", "Compasión", "Frustración", "Alivio",
+  "Confusión", "Emoción", "Nerviosismo", "Confianza", "Desconfianza", "Soledad", "Nostalgico", "Rabia",
+  "Odio", "Amor", "Cariño", "Devoción", "Fanatismo", "Adrenalina", "Vértigo", "Placer",
+  "Dolor", "Sufrimiento", "Éxtasis", "Desamor", "Ilusión", "Decepción", "Fastidio", "Hartazgo",
+  "Berrinche", "Capricho", "Guerrero", "Rebelde", "Payaso", "Villano", "Héroe", "Tramposo",
+  "Genio", "Torpe", "Coqueto", "Presumido", "Modesto", "Perezoso", "Trabajador", "Chismoso",
+  "Mentiroso", "Sincero", "Egoísta", "Generoso", "Vengativo", "Perdonador", "Impulsivo", "Calculador",
+  "Soñador", "Realista", "Pesimista", "Optimista", "Aventurero", "Miedoso", "Valiente", "Sabio",
+  "Tonto", "Astuto", "Ingenuo", "Manipulador", "Leal", "Traidor", "Protector", "Solitario",
+  "Sociable", "Extrovertido", "Introvertido", "Curioso", "Indiferente", "Apasionado", "Frío", "Cálido",
+  "Serio", "Bromista", "Dramático", "Tranquilo", "Explosivo", "Paciente", "Impaciente", "Terco",
+  "Flexible", "Orgulloso", "Humilde", "Presuntuoso", "Discreto", "Escandaloso", "Elegante", "Tosco",
+  "Refinado", "Vulgar", "Noble", "Ruin", "Justo", "Injusto", "Cruel", "Bondadoso",
+  "Malvado", "Angelical", "Diabólico", "Inocente", "Perverso", "Ambicioso", "Conformista", "Idealista",
+  "Cínico", "Ingenioso", "Despistado", "Meticuloso", "Reptil", "Ave", "Insecto", "Roedor",
+  "Felino", "Canino", "Anfibio", "Pez", "Crustáceo", "Arácnido", "Molusco", "Marsupial",
+  "Primate", "Rumiante", "Cetáceo", "Quelonio", "Batracio", "Artrópodo", "Invertebrado", "Vertebrado",
+  "Depredador", "Herbívoro", "Carnívoro", "Omnívoro", "Carroñero", "Parásito", "Nocturno", "Migratorio",
+  "Territorial", "Manada", "Colonia", "Enjambre", "Rebaño", "Bandada", "Cardumen", "Camada",
+  "Cría", "Alfa", "Hembra", "Macho", "Larva", "Ninfa", "Crisálida", "Renacuajo",
+  "Polluelo", "Cachorro", "Ternero", "Potrillo", "Cervatillo", "Cabra", "Oveja", "Vaca",
+  "Caballo", "Cerdo", "Gallina", "Pato", "Ganso", "Pavo", "Conejo", "Liebre",
+  "Ardilla", "Castor", "Nutria", "Zorro", "Lobo", "Oso", "Tigre", "León",
+  "Leopardo", "Pantera", "Puma", "Lince", "Jaguar", "Hiena", "Chacal", "Coyote",
+  "Mapache", "Tejón", "Erizo", "Topo", "Murciélago", "Búho", "Águila", "Halcón",
+  "Cóndor", "Buitre", "Cuervo", "Loro", "Colibrí", "Cisne", "Grulla", "Flamenco",
+  "Pelícano", "Pingüino", "Foca", "Morsa", "Delfín", "Ballena", "Tiburón", "Pulpo",
+  "Calamar", "Medusa", "Estrella", "Cangrejo", "Langosta", "Camarón", "Almeja", "Ostra",
+  "Caracol", "Babosa", "Lombriz", "Gusano", "Abeja", "Avispa", "Hormiga", "Termita",
+  "Mariposa", "Polilla", "Libélula", "Grillo", "Saltamontes", "Escarabajo", "Cucaracha", "Mosca",
+  "Mosquito", "Araña", "Escorpión", "Ciempiés", "Cocodrilo", "Caimán", "Iguana", "Camaleón",
+  "Lagarto", "Serpiente", "Víbora", "Cobra", "Tortuga", "Rana", "Sapo", "Salamandra",
+  "Axolote", "Dinosaurio", "Mamut", "Unicornio", "Ángel", "Demonio", "Dios", "Diosa",
+  "Titán", "Gigante", "Enano", "Duende", "Elfo", "Orco", "Trol", "Ogro",
+  "Espectro", "Zombi", "Vampiro", "Hombrelobo", "Momia", "Esqueleto", "Bruja", "Mago",
+  "Hechicero", "Chamán", "Oráculo", "Profeta", "Sacerdote", "Monje", "Ermitaño", "Guardián",
+  "Centinela", "Vigía", "Explorador", "Pirata", "Corsario", "Bucanero", "Vikingo", "Samurái",
+  "Ninja", "Caballero", "Escudero", "Rey", "Reina", "Príncipe", "Princesa", "Emperador",
+  "Sultán", "Faraón", "Espíritu", "Alma", "Sombra", "Reflejo", "Espejismo", "Portal",
+  "Dimensión", "Universo", "Galaxia", "Cometa", "Meteorito", "Constelación", "Eclipse", "Amanecer",
+  "Atardecer", "Crepúsculo", "Medianoche", "Espada", "Escudo", "Lanza", "Arco", "Flecha",
+  "Hacha", "Martillo", "Daga", "Bastón", "Cetro", "Corona", "Trono", "Cofre",
+  "Llave", "Candado", "Puerta", "Ventana", "Espejo", "Reloj", "Vela", "Antorcha",
+  "Linterna", "Farol", "Campana", "Tambor", "Flauta", "Guitarra", "Violín", "Piano",
+  "Trompeta", "Libro", "Pergamino", "Mapa", "Brújula", "Telescopio", "Microscopio", "Balanza",
+  "Ancla", "Timón", "Bandera", "Estandarte", "Yelmo", "Armadura", "Capa", "Túnica",
+  "Sombrero", "Máscara", "Guante", "Bota", "Sandalia", "Cinturón", "Anillo", "Collar",
+  "Pulsera", "Amuleto", "Talismán", "Reliquia", "Tesoro", "Moneda", "Diamante", "Rubí",
+  "Esmeralda", "Zafiro", "Perla", "Cristal", "Piedra", "Arena", "Polvo", "Ceniza",
+  "Humo", "Vapor", "Burbuja", "Semilla", "Raíz", "Rama", "Hoja", "Flor",
+  "Fruto", "Espina", "Tronco", "Corteza", "Nido", "Panal", "Telaraña", "Caparazón",
+  "Concha", "Escama", "Pluma", "Garra", "Colmillo", "Cuerno", "Aleta", "Cola",
+  "Ala", "Bosque", "Selva", "Desierto", "Montaña", "Volcán", "Glaciar", "Océano",
+  "Río", "Lago", "Cascada", "Pantano", "Cueva", "Acantilado", "Valle", "Colina",
+  "Pradera", "Sabana", "Tundra", "Estepa", "Isla", "Archipiélago", "Arrecife", "Manglar",
+  "Duna", "Oasis", "Géiser", "Cráter", "Cordillera", "Meseta", "Cañón", "Trueno",
+  "Relámpago", "Rayo", "Tormenta", "Huracán", "Tornado", "Terremoto", "Tsunami", "Avalancha",
+  "Ventisca", "Granizo", "Niebla", "Rocío", "Escarcha", "Sequía", "Inundación", "Marea",
+  "Corriente", "Remolino", "Arcoíris", "Aurora", "Nube", "Lluvia", "Nieve", "Viento",
+  "Brisa", "Calor", "Humedad", "Manzana", "Naranja", "Plátano", "Uva", "Fresa",
+  "Cereza", "Durazno", "Sandía", "Melón", "Piña", "Coco", "Limón", "Pomelo",
+  "Kiwi", "Mango", "Papaya", "Higo", "Ciruela", "Pera", "Granada", "Arándano",
+  "Frambuesa", "Mora", "Aceituna", "Tomate", "Papa", "Cebolla", "Ajo", "Zanahoria",
+  "Lechuga", "Espinaca", "Brócoli", "Coliflor", "Calabaza", "Pepino", "Berenjena", "Pimiento",
+  "Maíz", "Trigo", "Arroz", "Avena", "Cebada", "Pan", "Queso", "Manteca",
+  "Miel", "Azúcar", "Sal", "Pimienta", "Canela", "Chocolate", "Vainilla", "Caramelo",
+  "Galleta", "Torta", "Helado", "Pastel", "Budín", "Mermelada", "Yogur", "Leche",
+  "Huevo", "Carne", "Pescado", "Pollo", "Jamón", "Salchicha", "Sopa", "Guiso",
+  "Ensalada", "Pizza", "Hamburguesa", "Empanada", "Taco", "Sushi", "Fideo", "Ravioles",
+  "Ñoqui", "Rojo", "Azul", "Verde", "Amarillo", "Violeta", "Rosa", "Marrón",
+  "Gris", "Negro", "Blanco", "Dorado", "Plateado", "Turquesa", "Celeste", "Beige",
+  "Bordó", "Púrpura", "Magenta", "Coral", "Índigo", "Lavanda", "Fucsia", "Ocre",
+  "Caqui", "Vino", "Salmón", "Aqua", "Ámbar", "Bronce", "Cobre", "Marfil",
+  "Crema", "Oliva", "Mostaza", "Cian", "Escarlata", "Carmesí", "Madera", "Metal",
+  "Vidrio", "Plástico", "Papel", "Tela", "Seda", "Algodón", "Lana", "Cuero",
+  "Goma", "Cerámica", "Porcelana", "Oro", "Plata", "Hierro", "Mármol", "Granito",
+  "Arcilla", "Barro", "Ladrillo", "Cemento", "Hormigón", "Esponja", "Terciopelo", "Pana",
+  "Lino", "Mimbre", "Bambú", "Corcho", "Cera", "Cristalino", "Rugoso", "Suave",
+  "Áspero", "Liso", "Pegajoso", "Resbaladizo", "Húmedo", "Seco", "Esponjoso", "Duro",
+  "Blando", "Elástico", "Rígido", "Filoso", "Puntiagudo", "Redondeado", "Cuadrado", "Triangular",
+  "Esférico", "Cúbico", "Puntudo", "Rugido", "Gruñido", "Ladrido", "Maullido", "Silbido",
+  "Chillido", "Grito", "Susurro", "Eco", "Estruendo", "Chasquido", "Aplauso", "Risa",
+  "Llanto", "Suspiro", "Ronquido", "Aullido", "Graznido", "Relincho", "Mugido", "Balido",
+  "Cacareo", "Zumbido", "Crujido", "Tintineo", "Repique", "Golpe", "Portazo", "Explosión",
+  "Estallido", "Rechinido", "Murmullo", "Bramido", "Chirrido", "Sirena", "Melodía", "Canción",
+  "Ritmo", "Compás", "Acorde", "Destino", "Karma", "Equilibrio", "Armonía", "Discordia",
+  "Justicia", "Venganza", "Perdón", "Libertad", "Esclavitud", "Poder", "Debilidad", "Victoria",
+  "Derrota", "Batalla", "Guerra", "Alianza", "Rivalidad", "Amistad", "Enemistad", "Honor",
+  "Deshonra", "Gloria", "Fama", "Anonimato", "Riqueza", "Pobreza", "Ambición", "Conformismo",
+  "Progreso", "Decadencia", "Renacimiento", "Muerte", "Vida", "Eternidad", "Instante", "Infinito",
+  "Vacío", "Plenitud", "Perfección", "Imperfección", "Simplicidad", "Complejidad", "Orden", "Desorden",
+  "Simetría", "Asimetría", "Extremo", "Límite", "Frontera", "Umbral", "Transición", "Evolución",
+  "Involución", "Mutación", "Adaptación", "Supervivencia", "Extinción", "Cabeza", "Ojo", "Oreja",
+  "Nariz", "Boca", "Diente", "Lengua", "Cuello", "Hombro", "Brazo", "Codo",
+  "Mano", "Dedo", "Uña", "Pecho", "Espalda", "Cintura", "Cadera", "Pierna",
+  "Rodilla", "Pie", "Talón", "Corazón", "Pulmón", "Cerebro", "Hueso", "Músculo",
+  "Piel", "Sangre", "Vena", "Nervio", "Columna", "Costilla", "Cráneo", "Mandíbula",
+  "Mejilla", "Frente", "Mentón", "Párpado", "Robot", "Androide", "Cyborg", "Dron",
+  "Satélite", "Cohete", "Nave", "Radar", "Sensor", "Chip", "Circuito", "Batería",
+  "Motor", "Engranaje", "Palanca", "Botón", "Pantalla", "Cámara", "Antena", "Cable",
+  "Software", "Hardware", "Algoritmo", "Programa", "Código", "Red", "Servidor", "Dato",
+  "Señal", "Frecuencia", "Láser", "Holograma", "Simulación", "Realidad", "Virtual", "Inteligencia",
+  "Automatización", "Máquina", "Herramienta", "Aparato", "Fútbol", "Básquet", "Tenis", "Voley",
+  "Natación", "Atletismo", "Boxeo", "Karate", "Judo", "Esgrima", "Ciclismo", "Surf",
+  "Skate", "Patinaje", "Esquí", "Snowboard", "Rugby", "Béisbol", "Golf", "Hockey",
+  "Gimnasia", "Yoga", "Pilates", "Crossfit", "Escalada", "Rapel", "Buceo", "Pesca",
+  "Caza", "Tiro", "Arquería", "Sumo", "Triatlón", "Maratón", "Sprint", "Salto",
+  "Lanzamiento", "Remo", "Ópera", "Ballet", "Teatro", "Pintura", "Escultura", "Dibujo",
+  "Grafiti", "Fotografía", "Cine", "Poesía", "Novela", "Cuento", "Ensayo", "Cómic",
+  "Manga", "Anime", "Videojuego", "Animación", "Coreografía", "Improvisación", "Composición", "Orquesta",
+  "Banda", "Solista", "Coro", "Recital", "Concierto", "Festival", "Galería", "Museo",
+  "Exposición", "Performance", "Instalación", "Mural", "Boceto", "Retrato", "Paisaje", "Castillo",
+  "Palacio", "Templo", "Santuario", "Cementerio", "Mansión", "Cabaña", "Choza", "Torre",
+  "Fortaleza", "Muralla", "Puente", "Túnel", "Laberinto", "Mazmorra", "Calabozo", "Biblioteca",
+  "Mercado", "Plaza", "Callejón", "Puerto", "Muelle", "Faro", "Estación", "Aeropuerto",
+  "Fábrica", "Taller", "Laboratorio", "Invernadero", "Granja", "Establo", "Corral", "Colmena",
+  "Guarida", "Madriguera", "Refugio", "Escondite", "Ruina", "Monumento", "Primavera", "Verano",
+  "Otoño", "Invierno", "Mediodía", "Madrugada", "Anochecer", "Pasado", "Presente", "Futuro",
+  "Momento", "Época", "Era", "Siglo", "Década", "Temporada", "Ciclo", "Fase"
+];
+
+// ---- local (per-device, non-persistent) session info ----
+let ROOM_CODE = null;
+let DEMO_MODE = false;
+let MY_SEAT = null;
+let uiScreen = 'home'; // home | join-name | (mirrors room.phase once joined)
+let room = null;
+let lastUpdatedAt = null;
+let pollTimer = null;
+
+function shuffle(arr){
+  const a = [...arr];
+  for(let i=a.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+  return a;
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function genCode(){
+  const letters = 'BCDFGHJKLMNPQRSTVWXYZ';
+  let c = '';
+  for(let i=0;i<4;i++) c += letters[Math.floor(Math.random()*letters.length)];
+  return c;
+}
+function seatTeam(seat){ return seat < 2 ? 'A' : 'B'; }
+function teamSeats(teamId){ return teamId === 'A' ? [0,1] : [2,3]; }
+
+let POKEMON_MAP = new Map(); // key: nombre mostrado en minúscula -> {name, slug, spriteSmall}
+let POKEMON_LIST = [];
+let currentSuggestions = [];
+let namesLoaded = false;
+
+const EXCLUDE_SUBSTR = [
+  'gmax','totem','-cap','starter','cosplay','belle','-phd','libre',
+  'pop-star','rock-star','eternamax'
+];
+const FORM_SPECIES = new Set([
+  'rotom','wormadam','deoxys','giratina','shaymin','basculin','darmanitan',
+  'meloetta','aegislash','pumpkaboo','gourgeist','zygarde','hoopa','oricorio',
+  'lycanroc','minior','mimikyu','toxtricity','eiscue','indeedee','morpeko',
+  'urshifu','calyrex','basculegion','enamorus','squawkabilly','tatsugiri',
+  'dudunsparce','ogerpon','tornadus','thundurus','landorus','kyurem','keldeo',
+  'castform','cherrim','necrozma','zarude','terapagos','greninja','wishiwashi',
+  'zacian','zamazenta'
+]);
+const REGION_PREFIX = { alola:'Alola', galar:'Galar', hisui:'Hisui', paldea:'Paldea' };
+
+function titleWord(w){ return w ? w.charAt(0).toUpperCase()+w.slice(1) : w; }
+
+function buildDisplayName(slug){
+  const lower = slug.toLowerCase();
+  for(const bad of EXCLUDE_SUBSTR){ if(lower.includes(bad)) return null; }
+  if(lower.startsWith('unown-')) return null; // dejamos solo el Unown base
+
+  if(lower.endsWith('-mega-x')){
+    const base = lower.slice(0, -('-mega-x'.length));
+    return 'Mega ' + base.split('-').map(titleWord).join(' ') + ' X';
+  }
+  if(lower.endsWith('-mega-y')){
+    const base = lower.slice(0, -('-mega-y'.length));
+    return 'Mega ' + base.split('-').map(titleWord).join(' ') + ' Y';
+  }
+  if(lower.endsWith('-mega-z')){
+    const base = lower.slice(0, -('-mega-z'.length));
+    return 'Mega ' + base.split('-').map(titleWord).join(' ') + ' Z';
+  }
+  if(lower.endsWith('-mega')){
+    const base = lower.slice(0, -('-mega'.length));
+    return 'Mega ' + base.split('-').map(titleWord).join(' ');
+  }
+  if(lower.endsWith('-primal')){
+    const base = lower.slice(0, -('-primal'.length));
+    return 'Primal ' + base.split('-').map(titleWord).join(' ');
+  }
+  for(const suf in REGION_PREFIX){
+    if(lower.endsWith('-'+suf)){
+      const base = lower.slice(0, -(suf.length+1));
+      return REGION_PREFIX[suf] + ' ' + base.split('-').map(titleWord).join(' ');
+    }
+  }
+  const firstToken = lower.split('-')[0];
+  if(FORM_SPECIES.has(firstToken) && lower.includes('-')){
+    const rest = lower.slice(firstToken.length+1);
+    return titleWord(firstToken) + ' (' + rest.split('-').map(titleWord).join(' ') + ')';
+  }
+  // nombre base (incluye especies con guion propio: Mr Mime, Tapu Koko, Ho Oh, etc.)
+  return lower.split('-').map(titleWord).join(' ');
+}
+
+async function fetchSprite(slug){
+  if(!slug) return null;
+  try{
+    const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${encodeURIComponent(slug)}`);
+    if(!res.ok) return null;
+    const data = await res.json();
+    return (data.sprites && data.sprites.other && data.sprites.other['official-artwork']
+      && data.sprites.other['official-artwork'].front_default)
+      || (data.sprites && data.sprites.front_default) || null;
+  }catch(e){ return null; }
+}
+
+async function loadPokemonNames(){
+  try{
+    const res = await fetch('https://pokeapi.co/api/v2/pokemon?limit=4000');
+    if(!res.ok) return;
+    const data = await res.json();
+    data.results.forEach(p=>{
+      const idMatch = p.url.match(/\/pokemon\/(\d+)\//);
+      if(!idMatch) return;
+      const displayName = buildDisplayName(p.name);
+      if(!displayName) return;
+      const key = displayName.toLowerCase();
+      if(POKEMON_MAP.has(key)) return;
+      const entry = {
+        name: displayName,
+        slug: p.name,
+        spriteSmall: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${idMatch[1]}.png`
+      };
+      POKEMON_MAP.set(key, entry);
+      POKEMON_LIST.push(entry);
+    });
+    namesLoaded = true;
+  }catch(e){ /* si falla, la validación avisa que todavía no cargó */ }
+  addManualEntry('raichu-mega-x');
+  addManualEntry('raichu-mega-y');
+  addManualEntry('absol-mega-z');
+}
+function addManualEntry(slug){
+  const displayName = buildDisplayName(slug);
+  if(!displayName) return;
+  const key = displayName.toLowerCase();
+  if(POKEMON_MAP.has(key)) return;
+  const entry = { name: displayName, slug, spriteSmall: null };
+  POKEMON_MAP.set(key, entry);
+  POKEMON_LIST.push(entry);
+}
+
+function filterPokemonSuggestions(query){
+  const box = document.getElementById('pokeSuggestions');
+  if(!box) return;
+  const q = query.trim().toLowerCase();
+  if(q.length < 1 || !namesLoaded){ box.innerHTML=''; currentSuggestions=[]; return; }
+  currentSuggestions = POKEMON_LIST.filter(p => p.name.toLowerCase().includes(q)).slice(0,8);
+  box.innerHTML = currentSuggestions.map((p,i)=>`
+    <div class="poke-suggest-row" onclick="pickSuggestion(${i})">
+      ${p.spriteSmall ? `<img src="${p.spriteSmall}" alt="" onerror="this.style.visibility='hidden'">` : '<span style="width:28px;flex-shrink:0;"></span>'}
+      <span>${escapeHtml(p.name)}</span>
+    </div>`).join('');
+}
+function pickSuggestion(i){
+  const item = currentSuggestions[i];
+  if(!item) return;
+  const input = document.getElementById('pokeName');
+  if(input) input.value = item.name;
+  const box = document.getElementById('pokeSuggestions');
+  if(box) box.innerHTML = '';
+  const err = document.getElementById('clueError');
+  if(err) err.textContent = '';
+}
+
+
+async function fetchRoom(code){
+  if(DEMO_MODE){ return room ? JSON.parse(JSON.stringify(room)) : null; }
+  try{
+    const snap = await db.ref('rooms/'+code).get();
+    return snap.exists() ? snap.val() : null;
+  }catch(e){ return null; }
+}
+async function saveRoom(r){
+  r.updatedAt = Date.now();
+  if(DEMO_MODE){ room = r; lastUpdatedAt = r.updatedAt; return; }
+  await db.ref('rooms/'+r.code).set(r);
+  room = r; lastUpdatedAt = r.updatedAt;
+}
+
+async function startDemo(){
+  DEMO_MODE = true;
+  ROOM_CODE = 'DEMO';
+  MY_SEAT = 0;
+  const r = {
+    code:'DEMO', seats:['Vos','Sky','Trece','Rival'], phase:'lobby',
+    round:0, board:null, cellQueue:[], turnQueue:[], turnIdx:0, turn:null,
+    score:{A:0,B:0}, log:[], updatedAt:Date.now()
+  };
+  await saveRoom(r);
+  render();
+}
+function demoSwitchSeat(i){ MY_SEAT = i; render(); }
+function exitDemo(){
+  DEMO_MODE = false; room = null; ROOM_CODE = null; MY_SEAT = null; uiScreen = 'home';
+  render();
+}
+function demoBarHTML(){
+  const labels = room ? room.seats : ['Vos','Sky','Trece','Rival'];
+  return `<div class="demo-bar">
+    <span class="demo-tag" style="width:100%; text-align:center;">MODO OFFLINE — viendo como ${escapeHtml(labels[MY_SEAT] || ('J'+(MY_SEAT+1)))}</span>
+    ${[0,1,2,3].map(i=>`<button class="${MY_SEAT===i?'current':''}" onclick="demoSwitchSeat(${i})">${escapeHtml(labels[i] || ('J'+(i+1)))}</button>`).join('')}
+    <button class="secondary" onclick="exitDemo()">SALIR</button>
+  </div>`;
+}
+
+let roomListenerRef = null;
+function startPolling(){
+  // Ya no es polling: es un listener en tiempo real de Firebase.
+  if(roomListenerRef) roomListenerRef.off();
+  roomListenerRef = db.ref('rooms/'+ROOM_CODE);
+  roomListenerRef.on('value', (snap)=>{
+    const r = snap.val();
+    if(r && r.updatedAt !== lastUpdatedAt){
+      room = r; lastUpdatedAt = r.updatedAt; render();
+    }
+  });
+}
+
+// ---------- game logic (mutates `room`, then saveRoom) ----------
+function newBoard(r){
+  const picks = shuffle(CATEGORY_POOL).slice(0,6);
+  r.board = { rowCats: picks.slice(0,3), colCats: picks.slice(3,6) };
+}
+function newRound(r){
+  r.round++;
+  newBoard(r);
+  const cells = [];
+  for(let a=0;a<3;a++) for(let b=0;b<3;b++) cells.push({r:a,c:b});
+  r.cellQueue = shuffle(cells);
+  r.turnQueue = r.round % 2 === 1 ? ['A','B'] : ['B','A'];
+  r.turnIdx = 0;
+  startTurn(r);
+}
+function startTurn(r){
+  const teamId = r.turnQueue[r.turnIdx];
+  const seats = teamSeats(teamId);
+  const clueIsFirst = r.round % 2 === 1;
+  const clueSeat = clueIsFirst ? seats[0] : seats[1];
+  const guessSeat = clueIsFirst ? seats[1] : seats[0];
+  const cell = r.cellQueue.pop();
+  r.turn = { teamId, clueSeat, guessSeat, cell, phase:'clue', pokemonName:'', guess:null, correct:null };
+  r.phase = 'playing';
+}
+
+async function createRoom(){
+  if(!db){ alert('Firebase todavía no está configurado (falta pegar la config real). Por ahora podés mirar el diseño, pero crear sala no va a andar.'); return; }
+  const code = genCode();
+  const r = {
+    code, seats:[null,null,null,null], phase:'lobby',
+    round:0, board:null, cellQueue:[], turnQueue:[], turnIdx:0, turn:null,
+    score:{A:0,B:0}, log:[], updatedAt:Date.now()
+  };
+  ROOM_CODE = code;
+  await saveRoom(r);
+  uiScreen = 'join-name';
+  render();
+}
+async function tryJoinRoom(){
+  if(!db){ alert('Firebase todavía no está configurado (falta pegar la config real). Por ahora podés mirar el diseño, pero unirte a una sala no va a andar.'); return; }
+  const code = document.getElementById('codeInput').value.trim().toUpperCase();
+  if(code.length !== 4){ alert('El código tiene 4 letras.'); return; }
+  const r = await fetchRoom(code);
+  if(!r){ alert('No encontré esa sala. Revisá el código.'); return; }
+  ROOM_CODE = code; room = r; lastUpdatedAt = r.updatedAt;
+  uiScreen = 'join-name';
+  render();
+}
+async function confirmSeat(){
+  const name = document.getElementById('nameInput').value.trim();
+  if(!name){ alert('Poné un nombre.'); return; }
+  const r = await fetchRoom(ROOM_CODE);
+  if(!r){ alert('La sala ya no existe.'); return; }
+  const existingIdx = r.seats.findIndex(s => s && s.toLowerCase() === name.toLowerCase());
+  if(existingIdx !== -1){
+    MY_SEAT = existingIdx;
+  } else {
+    const freeIdx = r.seats.findIndex(s => s === null);
+    if(freeIdx === -1){ alert('La sala ya tiene 4 jugadores.'); return; }
+    r.seats[freeIdx] = name;
+    MY_SEAT = freeIdx;
+  }
+  await saveRoom(r);
+  startPolling();
+  render();
+}
+async function beginGame(){
+  const r = await fetchRoom(ROOM_CODE);
+  if(r.seats.some(s => !s)){ return; }
+  newRound(r);
+  await saveRoom(r);
+  render();
+}
+async function confirmClue(){
+  const btn = document.getElementById('confirmClueBtn');
+  const errorEl = document.getElementById('clueError');
+  const inputEl = document.getElementById('pokeName');
+  const nameRaw = inputEl.value.trim();
+  if(errorEl) errorEl.textContent = '';
+
+  if(!nameRaw){
+    if(errorEl) errorEl.textContent = 'Escribí un Pokémon.';
+    return;
+  }
+  if(!namesLoaded){
+    if(errorEl) errorEl.textContent = 'Todavía estoy cargando la lista de Pokémon, esperá un segundo y probá de nuevo.';
+    return;
+  }
+  const entry = POKEMON_MAP.get(nameRaw.toLowerCase());
+  if(!entry){
+    if(errorEl) errorEl.textContent = `"${nameRaw}" no existe. Elegí uno de los que te sugiere la lista.`;
+    return;
+  }
+
+  if(btn){ btn.disabled = true; btn.textContent = 'BUSCANDO SPRITE...'; }
+  const spriteUrl = await fetchSprite(entry.slug);
+  const r = await fetchRoom(ROOM_CODE);
+  if(!r.turn || r.turn.phase !== 'clue') return;
+  r.turn.pokemonName = entry.name;
+  r.turn.spriteUrl = spriteUrl || entry.spriteSmall;
+  r.turn.phase = 'guess';
+  await saveRoom(r);
+  render();
+}
+async function guessCell(rr,cc){
+  const r = await fetchRoom(ROOM_CODE);
+  const t = r.turn;
+  if(!t || t.phase !== 'guess') return;
+  if(MY_SEAT !== t.guessSeat) return;
+  t.guess = {r:rr,c:cc};
+  t.correct = (rr === t.cell.r && cc === t.cell.c);
+  if(t.correct) r.score[t.teamId] += 1;
+  const rowc = r.board.rowCats[t.cell.r], colc = r.board.colCats[t.cell.c];
+  const clueName = r.seats[t.clueSeat], guessName = r.seats[t.guessSeat];
+  r.log.push(`${t.teamId==='A'?'Equipo A':'Equipo B'} · ${escapeHtml(clueName)}→${escapeHtml(guessName)}` +
+    (t.pokemonName ? ` · "${escapeHtml(t.pokemonName)}"` : '') +
+    ` · ${escapeHtml(rowc)} x ${escapeHtml(colc)} · ${t.correct ? 'ACIERTO' : 'FALLO'}`);
+  t.phase = 'result';
+  await saveRoom(r);
+  render();
+}
+async function continueAfterResult(){
+  const r = await fetchRoom(ROOM_CODE);
+  if(!r.turn || r.turn.phase !== 'result') return;
+  r.turnIdx++;
+  if(r.turnIdx < r.turnQueue.length){
+    startTurn(r);
+  } else {
+    r.phase = 'round-summary';
+  }
+  await saveRoom(r);
+  render();
+}
+async function nextRound(){
+  const r = await fetchRoom(ROOM_CODE);
+  newRound(r);
+  await saveRoom(r);
+  render();
+}
+async function endGame(){
+  const r = await fetchRoom(ROOM_CODE);
+  r.phase = 'game-over';
+  await saveRoom(r);
+  render();
+}
+async function newGameSameSeats(){
+  const r = await fetchRoom(ROOM_CODE);
+  r.phase = 'lobby'; r.score = {A:0,B:0}; r.round = 0; r.log = []; r.turn = null;
+  await saveRoom(r);
+  render();
+}
+
+// ---------- rendering ----------
+function boardHTML(r, {revealSecret=false, clickable=false, resultReveal=false, spriteUrl=null} = {}){
+  const { rowCats, colCats } = r.board;
+  const t = r.turn;
+  let html = '<div class="board"><div class="cat corner"></div>';
+  colCats.forEach(c => html += `<div class="cat">${escapeHtml(c)}</div>`);
+  for(let rr=0; rr<3; rr++){
+    html += `<div class="cat">${escapeHtml(rowCats[rr])}</div>`;
+    for(let cc=0; cc<3; cc++){
+      let cls = 'cell'; let mark = '';
+      const isSecret = t.cell.r===rr && t.cell.c===cc;
+      if(revealSecret && isSecret){ cls += ' secret'; mark = '★'; }
+      if(clickable){ cls += ' clickable'; }
+      if(resultReveal){
+        if(t.guess && t.guess.r===rr && t.guess.c===cc){
+          cls += t.correct ? ' hit' : ' miss';
+          mark = t.correct ? '✓' : '✕';
+        } else if(!t.correct && isSecret){
+          cls += ' hit';
+          mark = '★';
+        }
+      }
+      const spriteImg = spriteUrl
+        ? `<img class="sprite" style="animation:popIn .45s cubic-bezier(.34,1.56,.64,1) ${(rr*3+cc)*70}ms both, bob 1.1s ease-in-out ${(rr*3+cc)*70+450}ms infinite;" src="${spriteUrl}" onerror="this.style.opacity='0'">`
+        : '';
+      const markHtml = mark ? `<span class="mark">${mark}</span>` : '';
+      html += `<div class="${cls}" ${clickable?`onclick="guessCell(${rr},${cc})"`:''}>${spriteImg}${markHtml}</div>`;
+    }
+  }
+  html += '</div>';
+  return html;
+}
+function scoreBarHTML(r){
+  const nameA = r.seats.slice(0,2).filter(Boolean).join(' & ') || 'Equipo A';
+  const nameB = r.seats.slice(2,4).filter(Boolean).join(' & ') || 'Equipo B';
+  return `<div class="scorebar">
+    <span class="team-a">${escapeHtml(nameA)}<br>${r.score.A} pts</span>
+    <span>SALA ${r.code} · R${r.round}</span>
+    <span class="team-b" style="text-align:right">${escapeHtml(nameB)}<br>${r.score.B} pts</span>
+  </div>`;
+}
+
+function renderTopScreen(){
+  const top = document.getElementById('topScreen');
+  if(!top) return;
+  let html = room ? scoreBarHTML(room) : `<div class="brand-logo">PISTAS CRUZADAS<span>EDICIÓN POKÉMON</span></div>`;
+  if(DEMO_MODE) html += demoBarHTML();
+  top.innerHTML = html;
+}
+
+function render(){
+  renderTopScreen();
+  const el = document.getElementById('screen');
+
+  if(uiScreen === 'home' && !room){
+    el.innerHTML = `
+      <div class="title-menu">
+        <div class="title-box">
+          <div class="title-box-header">UNIRME A SALA</div>
+          <p class="hint" style="margin:2px 0 8px;">¿Ya tenés un código de 4 letras?</p>
+          <input type="text" id="codeInput" placeholder="CÓDIGO" maxlength="4" style="text-transform:uppercase; margin-bottom:6px;">
+          <button class="secondary" onclick="tryJoinRoom()">UNIRME</button>
+        </div>
+        <div class="title-box highlight">
+          <div class="title-box-header">SALA NUEVA</div>
+          <p class="hint" style="margin:2px 0 8px;">Arrancá una partida para vos y 3 más.</p>
+          <button onclick="createRoom()">CREAR SALA</button>
+        </div>
+        <div class="title-box">
+          <div class="title-box-header">EXPLORAR DISEÑO</div>
+          <p class="hint" style="margin:2px 0 8px;">Recorré todas las pantallas del juego sin conexión, vos solo.</p>
+          <button class="secondary" onclick="startDemo()">MODO OFFLINE</button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  if(uiScreen === 'join-name' && MY_SEAT === null){
+    el.innerHTML = `
+      <h1>ENTRAR A LA SALA</h1>
+      <div class="code-display">${ROOM_CODE}</div>
+      <p class="hint">Compartí este código con los otros 3. Ahora poné tu nombre para sentarte:</p>
+      <input type="text" id="nameInput" placeholder="Tu nombre">
+      <button onclick="confirmSeat()">SENTARME</button>
+    `;
+    return;
+  }
+
+  if(!room) return;
+
+  if(room.phase === 'lobby'){
+    const seatHtml = room.seats.map((s,i)=>{
+      const team = seatTeam(i);
+      const mine = i === MY_SEAT ? ' mine' : '';
+      return `<div class="seat ${s?'filled':''} ${team.toLowerCase()}${mine}">
+        <span>Equipo ${team} · J${i%2+1}</span><span>${s?escapeHtml(s):'— vacío —'}</span>
+      </div>`;
+    }).join('');
+    const allFilled = room.seats.every(Boolean);
+    el.innerHTML = `
+      <h2>SALA ${room.code}</h2>
+      <div class="seatlist">${seatHtml}</div>
+      ${allFilled
+        ? `<button onclick="beginGame()">COMENZAR PARTIDA</button>`
+        : `<p class="hint pulse">Esperando jugadores...</p>`}
+    `;
+    return;
+  }
+
+  if(room.phase === 'playing'){
+    const t = room.turn;
+    const amClue = MY_SEAT === t.clueSeat;
+    const amGuess = MY_SEAT === t.guessSeat;
+    const clueName = room.seats[t.clueSeat], guessName = room.seats[t.guessSeat];
+    const teamBadge = `<span class="badge active ${t.teamId==='A'?'a':'b'}">Equipo ${t.teamId}</span>`;
+
+    if(t.phase === 'clue'){
+      if(amClue){
+        el.innerHTML = `
+          <h2>Tu coordenada secreta</h2>
+          ${boardHTML(room, {revealSecret:true})}
+          <p><b>${escapeHtml(room.board.rowCats[t.cell.r])}</b> x <b>${escapeHtml(room.board.colCats[t.cell.c])}</b></p>
+          <label class="hint">Decí en voz alta un Pokémon que combine ambas. Escribilo acá y confirmá:</label>
+          <input type="text" id="pokeName" placeholder="Ej: Snorlax" autocomplete="off" oninput="filterPokemonSuggestions(this.value)">
+          <div id="pokeSuggestions" class="poke-suggest"></div>
+          <p id="clueError" class="error"></p>
+          <button id="confirmClueBtn" onclick="confirmClue()">CONFIRMAR PISTA</button>`;
+      } else {
+        el.innerHTML = `
+          <div class="center-msg">
+            ${teamBadge}
+            <div class="big pulse">🔮</div>
+            <h2>${escapeHtml(clueName)} está pensando su pista...</h2>
+            <p class="hint">${amGuess ? 'Prepará el oído, te toca adivinar.' : 'Esperando a que termine este turno.'}</p>
+          </div>`;
+      }
+      return;
+    }
+
+    if(t.phase === 'guess'){
+      el.innerHTML = `
+        <h2>${amGuess ? '¿Qué coordenada cruzó?' : escapeHtml(guessName) + ' está adivinando...'}</h2>
+        <p class="hint">Pista dicha: <b>${t.pokemonName ? escapeHtml(t.pokemonName) : '(dicha en voz alta)'}</b></p>
+        ${boardHTML(room, {clickable:amGuess, spriteUrl:t.spriteUrl})}`;
+      return;
+    }
+
+    if(t.phase === 'result'){
+      const sparks = t.correct
+        ? `<div class="sparkles">${[8,28,50,72,90].map((left,i)=>`<span class="spark" style="left:${left}%; animation-delay:${i*90}ms;">✨</span>`).join('')}</div>`
+        : '';
+      el.innerHTML = `
+        <h2>${t.correct ? '<span class="celebrate">¡ACIERTO!</span>' : 'FALLARON'}</h2>
+        ${sparks}
+        ${boardHTML(room, {resultReveal:true, spriteUrl:t.spriteUrl})}
+        <p>Coordenada real: <b>${escapeHtml(room.board.rowCats[t.cell.r])}</b> x <b>${escapeHtml(room.board.colCats[t.cell.c])}</b></p>
+        <button onclick="continueAfterResult()">CONTINUAR</button>`;
+      return;
+    }
+  }
+
+  if(room.phase === 'round-summary'){
+    el.innerHTML = `
+      <h2>FIN DE RONDA ${room.round}</h2>
+      <div class="log">${room.log.slice(-4).map(l=>`<div>${l}</div>`).join('')}</div>
+      <button onclick="nextRound()">SIGUIENTE RONDA</button>
+      <button class="secondary" onclick="endGame()">TERMINAR PARTIDA</button>`;
+    return;
+  }
+
+  if(room.phase === 'game-over'){
+    const nameA = room.seats.slice(0,2).filter(Boolean).join(' & ');
+    const nameB = room.seats.slice(2,4).filter(Boolean).join(' & ');
+    const winner = room.score.A === room.score.B ? 'EMPATE'
+      : (room.score.A > room.score.B ? nameA + ' GANA' : nameB + ' GANA');
+    el.innerHTML = `
+      <h1>FIN DEL JUEGO</h1>
+      <p><span class="badge a">${escapeHtml(nameA)}</span> ${room.score.A} pts</p>
+      <p><span class="badge b">${escapeHtml(nameB)}</span> ${room.score.B} pts</p>
+      <h2>${winner}</h2>
+      <div class="log">${room.log.map(l=>`<div>${l}</div>`).join('')}</div>
+      <button onclick="newGameSameSeats()">REVANCHA (mismos jugadores)</button>`;
+    return;
+  }
+}
+
+loadPokemonNames();
+render();
+</script>
+</body>
+</html>
