@@ -543,11 +543,21 @@ function pickSuggestion(i){
 }
 
 
+function normalizeRoom(r){
+  if(!r) return r;
+  if(!Array.isArray(r.seats) || r.seats.length !== 4) r.seats = ['','','',''];
+  if(!Array.isArray(r.log)) r.log = [];
+  if(!Array.isArray(r.cellQueue)) r.cellQueue = [];
+  if(!Array.isArray(r.turnQueue)) r.turnQueue = [];
+  if(!r.score || typeof r.score !== 'object') r.score = {A:0,B:0};
+  return r;
+}
+
 async function fetchRoom(code){
-  if(DEMO_MODE){ return room ? JSON.parse(JSON.stringify(room)) : null; }
+  if(DEMO_MODE){ return room ? normalizeRoom(JSON.parse(JSON.stringify(room))) : null; }
   try{
     const snap = await db.ref('rooms/'+code).get();
-    return snap.exists() ? snap.val() : null;
+    return snap.exists() ? normalizeRoom(snap.val()) : null;
   }catch(e){ return null; }
 }
 async function saveRoom(r){
@@ -589,7 +599,7 @@ function startPolling(){
   if(roomListenerRef) roomListenerRef.off();
   roomListenerRef = db.ref('rooms/'+ROOM_CODE);
   roomListenerRef.on('value', (snap)=>{
-    const r = snap.val();
+    const r = normalizeRoom(snap.val());
     if(r && r.updatedAt !== lastUpdatedAt){
       room = r; lastUpdatedAt = r.updatedAt; render();
     }
@@ -650,6 +660,7 @@ async function confirmSeat(){
   if(!name){ alert('Poné un nombre.'); return; }
   const r = await fetchRoom(ROOM_CODE);
   if(!r){ alert('La sala ya no existe.'); return; }
+  if(!Array.isArray(r.seats) || r.seats.length !== 4){ r.seats = ['','','','']; }
   const existingIdx = r.seats.findIndex(s => s && s.toLowerCase() === name.toLowerCase());
   if(existingIdx !== -1){
     MY_SEAT = existingIdx;
@@ -665,7 +676,7 @@ async function confirmSeat(){
 }
 async function beginGame(){
   const r = await fetchRoom(ROOM_CODE);
-  if(r.seats.some(s => !s)){ return; }
+  if(!r || !Array.isArray(r.seats) || r.seats.some(s => !s)){ return; }
   newRound(r);
   await saveRoom(r);
   render();
