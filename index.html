@@ -545,12 +545,15 @@ function pickSuggestion(i){
 
 function normalizeRoom(r){
   if(!r) return r;
-  if(!Array.isArray(r.seats) || r.seats.length !== 4) r.seats = ['','','',''];
-  if(!Array.isArray(r.log)) r.log = [];
-  if(!Array.isArray(r.cellQueue)) r.cellQueue = [];
-  if(!Array.isArray(r.turnQueue)) r.turnQueue = [];
-  if(!r.score || typeof r.score !== 'object') r.score = {A:0,B:0};
-  return r;
+  return {
+    ...r,
+    seats: (Array.isArray(r.seats) && r.seats.length === 4) ? r.seats.slice() : ['','','',''],
+    log: Array.isArray(r.log) ? r.log.slice() : [],
+    cellQueue: Array.isArray(r.cellQueue) ? r.cellQueue.slice() : [],
+    turnQueue: Array.isArray(r.turnQueue) ? r.turnQueue.slice() : [],
+    score: (r.score && typeof r.score === 'object') ? {...r.score} : {A:0,B:0},
+    turn: r.turn ? {...r.turn} : r.turn
+  };
 }
 
 async function fetchRoom(code){
