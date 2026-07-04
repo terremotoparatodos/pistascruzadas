@@ -552,7 +552,7 @@ function normalizeRoom(r){
     cellQueue: Array.isArray(r.cellQueue) ? r.cellQueue.slice() : [],
     turnQueue: Array.isArray(r.turnQueue) ? r.turnQueue.slice() : [],
     score: (r.score && typeof r.score === 'object') ? {...r.score} : {A:0,B:0},
-    turn: r.turn ? {...r.turn} : r.turn
+    turn: r.turn ? {...r.turn} : null
   };
 }
 
